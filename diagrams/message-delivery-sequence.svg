@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1620" height="940" viewBox="0 0 1620 940">
+  <defs>
+    <style>
+      .title { font: 700 24px Arial, sans-serif; fill: #172033; }
+      .head { font: 700 14px Arial, sans-serif; fill: #172033; }
+      .msg { font: 13px Arial, sans-serif; fill: #344054; }
+      .note { font: 12px Arial, sans-serif; fill: #475467; }
+      .actor { fill: #eaf2ff; stroke: #2f65b0; stroke-width: 2; rx: 8; }
+      .store { fill: #fff7e6; stroke: #b7791f; stroke-width: 2; rx: 8; }
+      .cache { fill: #f3ebff; stroke: #6b46c1; stroke-width: 2; rx: 8; }
+      .broker { fill: #eefaf1; stroke: #2f855a; stroke-width: 2; rx: 8; }
+      .life { stroke: #98a2b3; stroke-width: 1.5; stroke-dasharray: 5 5; }
+      .arrow { stroke: #344054; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .return { stroke: #667085; stroke-width: 1.6; fill: none; stroke-dasharray: 5 4; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#344054"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="42" class="title">Message Delivery Sequence - Online Recipient</text>
+
+  <rect x="25" y="80" width="110" height="48" class="actor"/><text x="80" y="110" text-anchor="middle" class="head">Sender</text>
+  <rect x="165" y="80" width="120" height="48" class="actor"/><text x="225" y="110" text-anchor="middle" class="head">API Gateway</text>
+  <rect x="325" y="80" width="130" height="48" class="actor"/><text x="390" y="110" text-anchor="middle" class="head">Socket Manager</text>
+  <rect x="500" y="80" width="135" height="48" class="actor"/><text x="567.5" y="110" text-anchor="middle" class="head">Message Service</text>
+  <rect x="680" y="80" width="110" height="48" class="store"/><text x="735" y="110" text-anchor="middle" class="head">Message DB</text>
+  <rect x="835" y="80" width="130" height="48" class="cache"/><text x="900" y="110" text-anchor="middle" class="head">Message Cache</text>
+  <rect x="1010" y="80" width="115" height="48" class="broker"/><text x="1067.5" y="110" text-anchor="middle" class="head">Broker</text>
+  <rect x="1170" y="80" width="135" height="48" class="actor"/><text x="1237.5" y="110" text-anchor="middle" class="head">Delivery Service</text>
+  <rect x="1345" y="80" width="130" height="48" class="cache"/><text x="1410" y="110" text-anchor="middle" class="head">Presence Cache</text>
+  <rect x="1510" y="80" width="90" height="48" class="actor"/><text x="1555" y="110" text-anchor="middle" class="head">Recipient</text>
+
+  <line x1="80" y1="128" x2="80" y2="900" class="life"/>
+  <line x1="225" y1="128" x2="225" y2="900" class="life"/>
+  <line x1="390" y1="128" x2="390" y2="900" class="life"/>
+  <line x1="567.5" y1="128" x2="567.5" y2="900" class="life"/>
+  <line x1="735" y1="128" x2="735" y2="900" class="life"/>
+  <line x1="900" y1="128" x2="900" y2="900" class="life"/>
+  <line x1="1067.5" y1="128" x2="1067.5" y2="900" class="life"/>
+  <line x1="1237.5" y1="128" x2="1237.5" y2="900" class="life"/>
+  <line x1="1410" y1="128" x2="1410" y2="900" class="life"/>
+  <line x1="1555" y1="128" x2="1555" y2="900" class="life"/>
+
+  <path class="arrow" d="M 80 170 L 225 170"/><text x="92" y="161" class="msg">1. WebSocket message</text>
+  <path class="arrow" d="M 225 215 L 390 215"/><text x="245" y="206" class="msg">2. proxy event</text>
+  <path class="arrow" d="M 390 260 L 567.5 260"/><text x="410" y="251" class="msg">3. send request</text>
+  <text x="580" y="305" class="note">4. compute deterministic conversation_id</text>
+  <path class="arrow" d="M 567.5 345 L 735 345"/><text x="585" y="336" class="msg">5. save as SENT</text>
+  <path class="return" d="M 735 390 L 567.5 390"/><text x="615" y="380" class="msg">6. saved</text>
+  <path class="arrow" d="M 567.5 435 L 900 435"/><text x="610" y="426" class="msg">7. update recent message cache</text>
+  <path class="arrow" d="M 567.5 480 L 1067.5 480"/><text x="670" y="471" class="msg">8. publish MessageCreated</text>
+  <path class="return" d="M 567.5 525 L 390 525"/><text x="425" y="516" class="msg">9. accepted</text>
+  <path class="return" d="M 390 565 L 225 565"/><text x="275" y="556" class="msg">10. single tick</text>
+  <path class="return" d="M 225 605 L 80 605"/><text x="122" y="596" class="msg">11. single tick</text>
+
+  <path class="arrow" d="M 1067.5 650 L 1237.5 650"/><text x="1090" y="641" class="msg">12. consume event</text>
+  <path class="arrow" d="M 1237.5 690 L 1410 690"/><text x="1260" y="681" class="msg">13. check presence</text>
+  <path class="return" d="M 1410 730 L 1237.5 730"/><text x="1275" y="720" class="msg">14. recipient ONLINE</text>
+  <path class="arrow" d="M 1237.5 770 L 390 770"/><text x="780" y="761" class="msg">15. deliver through Socket Manager</text>
+  <path class="arrow" d="M 390 810 L 225 810"/><text x="275" y="801" class="msg">16. push event</text>
+  <path class="arrow" d="M 225 850 L 1555 850"/><text x="835" y="841" class="msg">17. push message to recipient over WebSocket</text>
+  <path class="return" d="M 1555 890 L 225 890"/><text x="805" y="880" class="msg">18. delivery acknowledgement returns through API Gateway and Socket Manager</text>
+</svg>

@@ -30,62 +30,24 @@ Chatbot support is deferred to a later phase.
 
 ## 3. High-Level Architecture
 
-```mermaid
-flowchart LR
-    Client["Web / Mobile Client"]
-    Gateway["API Gateway"]
-
-    Auth["Auth Service"]
-    User["User Service"]
-    Socket["Socket Manager"]
-    Message["Message Service"]
-    Delivery["Delivery Service"]
-
-    AuthDB[("Auth DB")]
-    UserDB[("User DB")]
-    MessageDB[("Message DB")]
-    Broker[["Message Broker"]]
-    PresenceCache[("Presence Cache")]
-    MessageCache[("Message Cache")]
-
-    Client <-->|HTTPS| Gateway
-    Client <-->|WebSocket| Socket
-
-    Gateway --> Auth
-    Gateway --> User
-    Gateway --> Message
-
-    Auth --> AuthDB
-    User --> UserDB
-
-    Socket --> PresenceCache
-    Delivery --> PresenceCache
-
-    Socket --> Message
-    Message --> MessageDB
-    Message --> MessageCache
-    Message --> Broker
-
-    Broker --> Delivery
-    Delivery --> Socket
-    Delivery --> Message
-```
+![High-Level Architecture](diagrams/high-level-architecture.svg)
 
 ## 4. Service Responsibilities
 
 ### 4.1 API Gateway
 
-The API Gateway is the external entry point for HTTP APIs.
+The API Gateway is the external entry point for both HTTP APIs and WebSocket traffic.
 
 Responsibilities:
 
 - Route registration and login requests to Auth Service.
 - Route user listing/search requests to User Service.
 - Route message history requests to Message Service.
+- Route or proxy WebSocket connections to Socket Manager.
 - Validate authentication tokens for protected APIs.
 - Apply request-level controls such as rate limiting and basic validation.
 
-WebSocket traffic is handled by the Socket Manager.
+Clients should not connect directly to Socket Manager. Socket Manager is an internal service behind API Gateway.
 
 ### 4.2 Auth Service
 
@@ -118,7 +80,7 @@ User Service owns User DB.
 
 ### 4.4 Socket Manager
 
-Socket Manager owns live WebSocket connections.
+Socket Manager owns live WebSocket session handling behind API Gateway.
 
 Responsibilities:
 
@@ -339,183 +301,148 @@ A message should not be marked `DELIVERED` merely because the backend attempted 
 
 ### 9.1 User Registration
 
-```mermaid
-sequenceDiagram
-    participant C as "Client"
-    participant G as "API Gateway"
-    participant A as "Auth Service"
-    participant U as "User Service"
-    participant ADB as "Auth DB"
-    participant UDB as "User DB"
-
-    C->>G: Register username, password, first name, last name
-    G->>A: Create credentials
-    A->>ADB: Check username and save password hash
-    ADB-->>A: Credentials created
-    A->>U: Create user profile
-    U->>UDB: Save profile
-    UDB-->>U: Profile created
-    U-->>A: User profile created
-    A-->>G: Registration success
-    G-->>C: Registration success
+```text
+Client
+  -> API Gateway: Register username, password, first name, last name
+  -> Auth Service: Create credentials
+  -> Auth DB: Check username and save password hash
+  <- Auth DB: Credentials created
+  -> User Service: Create user profile
+  -> User DB: Save profile
+  <- User DB: Profile created
+  <- User Service: User profile created
+  <- Auth Service: Registration success
+  <- API Gateway: Registration success
 ```
 
 ### 9.2 Login
 
-```mermaid
-sequenceDiagram
-    participant C as "Client"
-    participant G as "API Gateway"
-    participant A as "Auth Service"
-    participant ADB as "Auth DB"
-
-    C->>G: Login username, password
-    G->>A: Authenticate
-    A->>ADB: Fetch credentials
-    ADB-->>A: Password hash
-    A-->>G: Auth token
-    G-->>C: Login success with token
+```text
+Client
+  -> API Gateway: Login username, password
+  -> Auth Service: Authenticate
+  -> Auth DB: Fetch credentials
+  <- Auth DB: Password hash
+  <- Auth Service: Auth token
+  <- API Gateway: Login success with token
 ```
 
 ### 9.3 User Connects Over WebSocket
 
-```mermaid
-sequenceDiagram
-    participant C as "Client"
-    participant S as "Socket Manager"
-    participant P as "Presence Cache"
-    participant M as "Message Service"
-    participant DB as "Message DB"
+![WebSocket Connect and Undelivered Message Sync](diagrams/reconnect-sequence.svg)
 
-    C->>S: Open WebSocket with auth token
-    S->>S: Validate token
-    S->>P: Set presence:{user_id} = ONLINE with TTL
-    S->>M: Get undelivered messages for user_id
-    M->>DB: Query messages where to_user_id = user_id and status = SENT
-    DB-->>M: Undelivered messages
-    M-->>S: Undelivered messages
-    S-->>C: Push undelivered messages
+```text
+Client -> API Gateway: Open WebSocket with auth token
+API Gateway -> Socket Manager: Proxy WebSocket connection
+Socket Manager -> Socket Manager: Validate token
+Socket Manager -> Presence Cache: Set presence:{user_id} = ONLINE with TTL
+Socket Manager -> Message Service: Get undelivered messages for user_id
+Message Service -> Message DB: Query messages where to_user_id = user_id and status = SENT
+Message DB -> Message Service: Undelivered messages
+Message Service -> Socket Manager: Undelivered messages
+Socket Manager -> API Gateway: Push undelivered messages
+API Gateway -> Client: Push undelivered messages
 ```
 
 ### 9.4 Send Message to Online User
 
-```mermaid
-sequenceDiagram
-    participant A as "Sender Client"
-    participant S as "Socket Manager"
-    participant M as "Message Service"
-    participant DB as "Message DB"
-    participant MC as "Message Cache"
-    participant B as "Message Broker"
-    participant D as "Delivery Service"
-    participant P as "Presence Cache"
-    participant R as "Recipient Client"
+![Message Delivery Sequence](diagrams/message-delivery-sequence.svg)
 
-    A->>S: Send message to recipient
-    S->>M: Send message request
-    M->>M: Compute conversation_id
-    M->>DB: Save message with status SENT
-    DB-->>M: Message saved
-    M->>MC: Update recent_messages:{conversation_id}
-    M->>B: Publish MessageCreated
-    M-->>S: Message accepted with status SENT
-    S-->>A: Single tick
+```text
+Sender Client -> API Gateway: Send WebSocket message to recipient
+API Gateway -> Socket Manager: Proxy message event
+Socket Manager -> Message Service: Send message request
+Message Service -> Message Service: Compute conversation_id
+Message Service -> Message DB: Save message with status SENT
+Message DB -> Message Service: Message saved
+Message Service -> Message Cache: Update recent_messages:{conversation_id}
+Message Service -> Message Broker: Publish MessageCreated
+Message Service -> Socket Manager: Message accepted with status SENT
+Socket Manager -> API Gateway: Single tick
+API Gateway -> Sender Client: Single tick
 
-    B-->>D: Consume MessageCreated
-    D->>P: Check recipient presence
-    P-->>D: Recipient ONLINE
-    D->>S: Deliver message to recipient
-    S-->>R: Push message
-    R-->>S: Delivery acknowledgement
-    S-->>D: Delivery acknowledgement
-    D->>M: Mark message DELIVERED
-    M->>DB: Update status to DELIVERED
-    M->>MC: Update cached message status
-    M-->>D: Status updated
-    D->>S: Notify sender of delivery
-    S-->>A: Double tick
+Message Broker -> Delivery Service: Consume MessageCreated
+Delivery Service -> Presence Cache: Check recipient presence
+Presence Cache -> Delivery Service: Recipient ONLINE
+Delivery Service -> Socket Manager: Deliver message to recipient
+Socket Manager -> API Gateway: Push message through WebSocket
+API Gateway -> Recipient Client: Push message
+Recipient Client -> API Gateway: Delivery acknowledgement
+API Gateway -> Socket Manager: Delivery acknowledgement
+Socket Manager -> Delivery Service: Delivery acknowledgement
+Delivery Service -> Message Service: Mark message DELIVERED
+Message Service -> Message DB: Update status to DELIVERED
+Message Service -> Message Cache: Update cached message status
+Message Service -> Delivery Service: Status updated
+Delivery Service -> Socket Manager: Notify sender of delivery
+Socket Manager -> API Gateway: Push delivery status
+API Gateway -> Sender Client: Double tick
 ```
 
 ### 9.5 Send Message to Offline User
 
-```mermaid
-sequenceDiagram
-    participant A as "Sender Client"
-    participant S as "Socket Manager"
-    participant M as "Message Service"
-    participant DB as "Message DB"
-    participant B as "Message Broker"
-    participant D as "Delivery Service"
-    participant P as "Presence Cache"
+```text
+Sender Client -> API Gateway: Send WebSocket message to offline recipient
+API Gateway -> Socket Manager: Proxy message event
+Socket Manager -> Message Service: Send message request
+Message Service -> Message Service: Compute conversation_id
+Message Service -> Message DB: Save message with status SENT
+Message DB -> Message Service: Message saved
+Message Service -> Message Broker: Publish MessageCreated
+Message Service -> Socket Manager: Message accepted with status SENT
+Socket Manager -> API Gateway: Single tick
+API Gateway -> Sender Client: Single tick
 
-    A->>S: Send message to offline recipient
-    S->>M: Send message request
-    M->>M: Compute conversation_id
-    M->>DB: Save message with status SENT
-    DB-->>M: Message saved
-    M->>B: Publish MessageCreated
-    M-->>S: Message accepted with status SENT
-    S-->>A: Single tick
-
-    B-->>D: Consume MessageCreated
-    D->>P: Check recipient presence
-    P-->>D: Recipient OFFLINE or missing
-    D->>D: Leave message as SENT
+Message Broker -> Delivery Service: Consume MessageCreated
+Delivery Service -> Presence Cache: Check recipient presence
+Presence Cache -> Delivery Service: Recipient OFFLINE or missing
+Delivery Service -> Delivery Service: Leave message as SENT
 ```
 
 ### 9.6 Offline User Reconnects
 
-```mermaid
-sequenceDiagram
-    participant R as "Recipient Client"
-    participant S as "Socket Manager"
-    participant P as "Presence Cache"
-    participant M as "Message Service"
-    participant DB as "Message DB"
-    participant D as "Delivery Service"
-    participant A as "Sender Client"
-
-    R->>S: Reconnect WebSocket
-    S->>S: Validate token
-    S->>P: Set presence:{user_id} = ONLINE with TTL
-    S->>M: Get undelivered messages for user_id
-    M->>DB: Query messages where to_user_id = user_id and status = SENT
-    DB-->>M: Undelivered messages
-    M-->>S: Return undelivered messages
-    S-->>R: Push undelivered messages
-    R-->>S: Delivery acknowledgement
-    S-->>D: Delivery acknowledgement
-    D->>M: Mark messages DELIVERED
-    M->>DB: Update statuses to DELIVERED
-    M-->>D: Status updated
-    D->>S: Notify senders of delivery
-    S-->>A: Double tick if sender is online
+```text
+Recipient Client -> API Gateway: Reconnect WebSocket
+API Gateway -> Socket Manager: Proxy WebSocket connection
+Socket Manager -> Socket Manager: Validate token
+Socket Manager -> Presence Cache: Set presence:{user_id} = ONLINE with TTL
+Socket Manager -> Message Service: Get undelivered messages for user_id
+Message Service -> Message DB: Query messages where to_user_id = user_id and status = SENT
+Message DB -> Message Service: Undelivered messages
+Message Service -> Socket Manager: Return undelivered messages
+Socket Manager -> API Gateway: Push undelivered messages
+API Gateway -> Recipient Client: Push undelivered messages
+Recipient Client -> API Gateway: Delivery acknowledgement
+API Gateway -> Socket Manager: Proxy delivery acknowledgement
+Socket Manager -> Delivery Service: Delivery acknowledgement
+Delivery Service -> Message Service: Mark messages DELIVERED
+Message Service -> Message DB: Update statuses to DELIVERED
+Message Service -> Delivery Service: Status updated
+Delivery Service -> Socket Manager: Notify senders of delivery
+Socket Manager -> API Gateway: Push delivery status
+API Gateway -> Sender Client: Double tick if sender is online
 ```
 
 ### 9.7 Fetch Recent Chat History
 
-```mermaid
-sequenceDiagram
-    participant C as "Client"
-    participant G as "API Gateway"
-    participant M as "Message Service"
-    participant MC as "Message Cache"
-    participant DB as "Message DB"
+```text
+Client
+  -> API Gateway: Open chat with user_id
+  -> Message Service: Fetch recent messages
+  -> Message Service: Compute conversation_id
+  -> Message Cache: Read recent_messages:{conversation_id}
 
-    C->>G: Open chat with user_id
-    G->>M: Fetch recent messages
-    M->>M: Compute conversation_id
-    M->>MC: Read recent_messages:{conversation_id}
-    alt Cache hit
-        MC-->>M: Recent messages
-        M-->>G: Recent messages
-    else Cache miss
-        M->>DB: Fetch recent messages by conversation_id
-        DB-->>M: Recent messages
-        M->>MC: Hydrate recent_messages:{conversation_id}
-        M-->>G: Recent messages
-    end
-    G-->>C: Recent messages
+If cache hit:
+  <- Message Cache: Recent messages
+  <- Message Service: Recent messages
+  <- API Gateway: Recent messages
+
+If cache miss:
+  -> Message DB: Fetch recent messages by conversation_id
+  <- Message DB: Recent messages
+  -> Message Cache: Hydrate recent_messages:{conversation_id}
+  <- Message Service: Recent messages
+  <- API Gateway: Recent messages
 ```
 
 ## 10. Key Design Decisions

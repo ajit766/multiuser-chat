@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1220" height="760" viewBox="0 0 1220 760">
+  <defs>
+    <style>
+      .title { font: 700 24px Arial, sans-serif; fill: #172033; }
+      .label { font: 600 15px Arial, sans-serif; fill: #172033; }
+      .small { font: 13px Arial, sans-serif; fill: #344054; }
+      .box { fill: #f8fbff; stroke: #315f9d; stroke-width: 2; rx: 8; }
+      .service { fill: #eaf2ff; stroke: #2f65b0; stroke-width: 2; rx: 8; }
+      .store { fill: #fff7e6; stroke: #b7791f; stroke-width: 2; rx: 8; }
+      .broker { fill: #eefaf1; stroke: #2f855a; stroke-width: 2; rx: 8; }
+      .cache { fill: #f3ebff; stroke: #6b46c1; stroke-width: 2; rx: 8; }
+      .arrow { stroke: #344054; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .dashed { stroke: #667085; stroke-width: 2; fill: none; stroke-dasharray: 6 5; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#344054"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="42" class="title">Multi-User Chat - High-Level Architecture</text>
+
+  <rect x="500" y="80" width="220" height="60" class="box"/>
+  <text x="610" y="106" text-anchor="middle" class="label">Web / Mobile Client</text>
+  <text x="610" y="126" text-anchor="middle" class="small">HTTP APIs + WebSocket</text>
+
+  <rect x="180" y="190" width="190" height="60" class="service"/>
+  <text x="275" y="226" text-anchor="middle" class="label">API Gateway</text>
+
+  <rect x="815" y="190" width="190" height="60" class="service"/>
+  <text x="910" y="226" text-anchor="middle" class="label">Socket Manager</text>
+
+  <rect x="70" y="330" width="170" height="64" class="service"/>
+  <text x="155" y="357" text-anchor="middle" class="label">Auth Service</text>
+  <text x="155" y="377" text-anchor="middle" class="small">credentials, login</text>
+
+  <rect x="300" y="330" width="170" height="64" class="service"/>
+  <text x="385" y="357" text-anchor="middle" class="label">User Service</text>
+  <text x="385" y="377" text-anchor="middle" class="small">profiles, search</text>
+
+  <rect x="590" y="330" width="190" height="64" class="service"/>
+  <text x="685" y="357" text-anchor="middle" class="label">Message Service</text>
+  <text x="685" y="377" text-anchor="middle" class="small">message state</text>
+
+  <rect x="940" y="330" width="190" height="64" class="service"/>
+  <text x="1035" y="357" text-anchor="middle" class="label">Delivery Service</text>
+  <text x="1035" y="377" text-anchor="middle" class="small">async delivery</text>
+
+  <rect x="70" y="500" width="170" height="64" class="store"/>
+  <text x="155" y="537" text-anchor="middle" class="label">Auth DB</text>
+
+  <rect x="300" y="500" width="170" height="64" class="store"/>
+  <text x="385" y="537" text-anchor="middle" class="label">User DB</text>
+
+  <rect x="590" y="500" width="190" height="64" class="store"/>
+  <text x="685" y="537" text-anchor="middle" class="label">Message DB</text>
+
+  <rect x="590" y="620" width="190" height="64" class="cache"/>
+  <text x="685" y="646" text-anchor="middle" class="label">Message Cache</text>
+  <text x="685" y="666" text-anchor="middle" class="small">recent messages</text>
+
+  <rect x="815" y="500" width="190" height="64" class="broker"/>
+  <text x="910" y="526" text-anchor="middle" class="label">Message Broker</text>
+  <text x="910" y="546" text-anchor="middle" class="small">MessageCreated</text>
+
+  <rect x="940" y="620" width="190" height="64" class="cache"/>
+  <text x="1035" y="646" text-anchor="middle" class="label">Presence Cache</text>
+  <text x="1035" y="666" text-anchor="middle" class="small">online / offline</text>
+
+  <path class="arrow" d="M 560 140 L 325 190"/>
+  <text x="365" y="160" class="small">HTTPS / WebSocket</text>
+  <path class="arrow" d="M 370 220 L 815 220"/>
+  <text x="540" y="210" class="small">WebSocket proxy</text>
+
+  <path class="arrow" d="M 245 250 L 170 330"/>
+  <path class="arrow" d="M 285 250 L 365 330"/>
+  <path class="arrow" d="M 370 235 L 590 350"/>
+  <text x="455" y="280" class="small">message history</text>
+
+  <path class="arrow" d="M 155 394 L 155 500"/>
+  <path class="arrow" d="M 385 394 L 385 500"/>
+
+  <path class="arrow" d="M 860 250 L 720 330"/>
+  <text x="760" y="290" class="small">send message</text>
+
+  <path class="arrow" d="M 685 394 L 685 500"/>
+  <path class="arrow" d="M 685 394 L 685 620"/>
+  <path class="arrow" d="M 780 362 L 940 362"/>
+  <path class="arrow" d="M 780 382 L 815 500"/>
+  <text x="795" y="434" class="small">publish event</text>
+
+  <path class="arrow" d="M 910 500 L 985 394"/>
+  <path class="arrow" d="M 1035 394 L 1035 620"/>
+  <path class="dashed" d="M 1005 652 L 910 250"/>
+  <text x="1047" y="500" class="small">reads presence</text>
+
+  <path class="arrow" d="M 940 350 L 910 250"/>
+  <text x="945" y="292" class="small">push to socket</text>
+
+  <path class="dashed" d="M 815 220 L 1005 620"/>
+  <text x="985" y="585" class="small">writes presence</text>
+
+  <path class="dashed" d="M 940 382 L 780 382"/>
+  <text x="815" y="410" class="small">mark delivered</text>
+</svg>

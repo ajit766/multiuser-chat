@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="760" viewBox="0 0 1320 760">
+  <defs>
+    <style>
+      .title { font: 700 24px Arial, sans-serif; fill: #172033; }
+      .head { font: 700 14px Arial, sans-serif; fill: #172033; }
+      .msg { font: 13px Arial, sans-serif; fill: #344054; }
+      .actor { fill: #eaf2ff; stroke: #2f65b0; stroke-width: 2; rx: 8; }
+      .store { fill: #fff7e6; stroke: #b7791f; stroke-width: 2; rx: 8; }
+      .cache { fill: #f3ebff; stroke: #6b46c1; stroke-width: 2; rx: 8; }
+      .life { stroke: #98a2b3; stroke-width: 1.5; stroke-dasharray: 5 5; }
+      .arrow { stroke: #344054; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .return { stroke: #667085; stroke-width: 1.6; fill: none; stroke-dasharray: 5 4; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#344054"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="42" class="title">WebSocket Connect and Undelivered Message Sync</text>
+
+  <rect x="40" y="80" width="110" height="48" class="actor"/><text x="95" y="110" text-anchor="middle" class="head">Recipient</text>
+  <rect x="205" y="80" width="125" height="48" class="actor"/><text x="267.5" y="110" text-anchor="middle" class="head">API Gateway</text>
+  <rect x="390" y="80" width="145" height="48" class="actor"/><text x="462.5" y="110" text-anchor="middle" class="head">Socket Manager</text>
+  <rect x="610" y="80" width="145" height="48" class="cache"/><text x="682.5" y="110" text-anchor="middle" class="head">Presence Cache</text>
+  <rect x="825" y="80" width="150" height="48" class="actor"/><text x="900" y="110" text-anchor="middle" class="head">Message Service</text>
+  <rect x="1080" y="80" width="120" height="48" class="store"/><text x="1140" y="110" text-anchor="middle" class="head">Message DB</text>
+
+  <line x1="95" y1="128" x2="95" y2="710" class="life"/>
+  <line x1="267.5" y1="128" x2="267.5" y2="710" class="life"/>
+  <line x1="462.5" y1="128" x2="462.5" y2="710" class="life"/>
+  <line x1="682.5" y1="128" x2="682.5" y2="710" class="life"/>
+  <line x1="900" y1="128" x2="900" y2="710" class="life"/>
+  <line x1="1140" y1="128" x2="1140" y2="710" class="life"/>
+
+  <path class="arrow" d="M 95 175 L 267.5 175"/><text x="115" y="166" class="msg">1. reconnect WebSocket with token</text>
+  <path class="arrow" d="M 267.5 230 L 462.5 230"/><text x="300" y="221" class="msg">2. proxy WebSocket</text>
+  <text x="480" y="280" class="msg">3. validate token</text>
+  <path class="arrow" d="M 462.5 335 L 682.5 335"/><text x="500" y="326" class="msg">4. set ONLINE with TTL</text>
+  <path class="arrow" d="M 462.5 395 L 900 395"/><text x="565" y="386" class="msg">5. get undelivered messages for user</text>
+  <path class="arrow" d="M 900 455 L 1140 455"/><text x="935" y="446" class="msg">6. query status = SENT</text>
+  <path class="return" d="M 1140 515 L 900 515"/><text x="955" y="506" class="msg">7. undelivered messages</text>
+  <path class="return" d="M 900 575 L 462.5 575"/><text x="620" y="566" class="msg">8. return messages</text>
+  <path class="arrow" d="M 462.5 635 L 267.5 635"/><text x="315" y="626" class="msg">9. push messages</text>
+  <path class="arrow" d="M 267.5 690 L 95 690"/><text x="130" y="681" class="msg">10. push over WebSocket</text>
+</svg>
