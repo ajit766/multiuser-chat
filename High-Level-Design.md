@@ -32,6 +32,45 @@ Chatbot support is deferred to a later phase.
 
 ![High-Level Architecture](diagrams/high-level-architecture.svg)
 
+### 3.1 Recommended Technology Stack
+
+This design will use AWS managed services where they reduce operational complexity without weakening the microservice boundaries.
+
+| Area | Recommended Technology | Notes |
+| --- | --- | --- |
+| Frontend | React + TypeScript + Next.js | Frontend framework can change later; this is the recommended default. |
+| Frontend hosting | Amazon S3 + Amazon CloudFront | AWS Amplify is also acceptable for a simpler beginner-friendly setup. |
+| API Gateway | Amazon API Gateway HTTP API + WebSocket API | Single public entry point for HTTP and WebSocket traffic. |
+| Backend language/framework | Python + FastAPI | Main backend service stack. |
+| Backend packaging | Docker | Each microservice is built as a Docker image. |
+| Container registry | Amazon ECR | Stores Docker images. |
+| Container runtime | Amazon ECS on AWS Fargate | Runs containers without managing servers or Kubernetes initially. |
+| Kubernetes | Not used initially | Amazon EKS can be considered later if Kubernetes becomes a learning or platform requirement. |
+| Auth provider | Amazon Cognito User Pools | Stores credentials, authenticates users, and issues JWT tokens. |
+| Auth Service | Python FastAPI service | Thin backend facade/orchestrator over Cognito and User Service. |
+| User DB | Amazon Aurora PostgreSQL | Stores user profile data and supports relational queries/search. |
+| Message DB | Amazon DynamoDB | Stores high-volume chat messages by conversation. |
+| Message broker | Amazon MSK Serverless | Kafka-compatible broker for async message delivery events. |
+| Presence cache | Amazon ElastiCache for Redis OSS or Valkey | Tracks online/offline state with TTL. |
+| Message cache | Amazon ElastiCache for Redis OSS or Valkey | Stores recent hot messages per conversation. |
+| Service permissions | AWS IAM roles and policies | Grants each backend service only the AWS permissions it needs. |
+| Secrets/config | AWS Secrets Manager + SSM Parameter Store | Stores database credentials, service config, and secrets. |
+| Observability | Amazon CloudWatch + AWS X-Ray/OpenTelemetry | Logs, metrics, traces, alarms. |
+| Infrastructure as Code | AWS CDK in Python | Defines AWS resources repeatably. |
+| CI/CD | GitHub Actions or AWS CodePipeline | Builds, tests, pushes images, and deploys services. |
+
+Recommended service implementation stack:
+
+```text
+Python 3.12+
+FastAPI
+Pydantic
+Uvicorn/Gunicorn
+boto3 / aioboto3
+SQLAlchemy or SQLModel for Aurora PostgreSQL access
+Docker
+```
+
 ## 4. Service Responsibilities
 
 ### 4.1 API Gateway
@@ -51,17 +90,19 @@ Clients should not connect directly to Socket Manager. Socket Manager is an inte
 
 ### 4.2 Auth Service
 
-Auth Service owns identity and credential management.
+Auth Service is a thin backend facade over Amazon Cognito. It owns the application-facing registration and login APIs, but it does not store passwords itself.
 
 Responsibilities:
 
-- Register credentials.
-- Validate login credentials.
-- Issue authentication token/session.
-- Logout or invalidate session.
-- Store password hashes and auth metadata.
+- Accept registration requests from API Gateway.
+- Validate required registration fields.
+- Create users in Amazon Cognito.
+- Coordinate profile creation with User Service.
+- Authenticate login requests by calling Cognito.
+- Return Cognito-issued JWT tokens to the client.
+- Handle registration rollback if profile creation fails after Cognito user creation.
 
-Auth Service owns Auth DB.
+Auth Service does not own a custom Auth DB initially. Cognito is the credential store and token issuer.
 
 ### 4.3 User Service
 
@@ -71,12 +112,15 @@ Responsibilities:
 
 - Store user profile data.
 - Enforce or coordinate username uniqueness.
+- Store Cognito user id against the application user profile.
 - Return paginated users excluding the logged-in user.
 - Support user search.
 
 For scale, the system should not expose a literal unbounded `getAllUsers` API. It should provide paginated listing and search.
 
 User Service owns User DB.
+
+In the recommended AWS stack, User DB is Amazon Aurora PostgreSQL.
 
 ### 4.4 Socket Manager
 
@@ -114,6 +158,8 @@ Responsibilities:
 
 Message DB remains the source of truth. Message Cache is only an optimization.
 
+In the recommended AWS stack, Message DB is Amazon DynamoDB and Message Cache is Amazon ElastiCache for Redis OSS or Valkey.
+
 ### 4.6 Delivery Service
 
 Delivery Service owns async real-time delivery workflow.
@@ -131,6 +177,8 @@ Responsibilities:
 ### 4.7 Message Broker
 
 Message Broker decouples message persistence from delivery.
+
+In the recommended AWS stack, Message Broker is Amazon MSK Serverless.
 
 Primary events:
 
@@ -217,6 +265,7 @@ If cache update fails, the system should continue using Message DB.
 ```text
 users
 - user_id
+- cognito_user_id
 - username
 - first_name
 - last_name
@@ -224,16 +273,17 @@ users
 - updated_at
 ```
 
-### 6.2 Auth
+### 6.2 Auth Identity
 
 ```text
-credentials
-- user_id
+Amazon Cognito User Pool
+- cognito_user_id
 - username
-- password_hash
-- created_at
-- updated_at
+- password credential managed by Cognito
+- token/session metadata managed by Cognito
 ```
+
+The application should not store password hashes in its own database initially. Cognito is the credential store and JWT issuer.
 
 ### 6.3 Message
 
@@ -302,29 +352,29 @@ A message should not be marked `DELIVERED` merely because the backend attempted 
 ### 9.1 User Registration
 
 ```text
-Client
-  -> API Gateway: Register username, password, first name, last name
-  -> Auth Service: Create credentials
-  -> Auth DB: Check username and save password hash
-  <- Auth DB: Credentials created
-  -> User Service: Create user profile
-  -> User DB: Save profile
-  <- User DB: Profile created
-  <- User Service: User profile created
-  <- Auth Service: Registration success
-  <- API Gateway: Registration success
+Client -> API Gateway: Register username, password, first name, last name
+API Gateway -> Auth Service: Register user
+Auth Service -> Cognito: Create user credentials
+Cognito -> Auth Service: Cognito user created
+Auth Service -> User Service: Create user profile with cognito_user_id
+User Service -> User DB: Save profile
+User DB -> User Service: Profile created
+User Service -> Auth Service: User profile created
+Auth Service -> API Gateway: Registration success
+API Gateway -> Client: Registration success
 ```
+
+If User Service profile creation fails after Cognito user creation, Auth Service should disable/delete the Cognito user or retry profile creation through a recovery flow.
 
 ### 9.2 Login
 
 ```text
-Client
-  -> API Gateway: Login username, password
-  -> Auth Service: Authenticate
-  -> Auth DB: Fetch credentials
-  <- Auth DB: Password hash
-  <- Auth Service: Auth token
-  <- API Gateway: Login success with token
+Client -> API Gateway: Login username, password
+API Gateway -> Auth Service: Login
+Auth Service -> Cognito: Authenticate user
+Cognito -> Auth Service: JWT tokens
+Auth Service -> API Gateway: Login success with JWT tokens
+API Gateway -> Client: Login success with JWT tokens
 ```
 
 ### 9.3 User Connects Over WebSocket
@@ -449,20 +499,30 @@ If cache miss:
 
 | Decision | Rationale |
 | --- | --- |
+| Use AWS managed services | Reduces operational work while still supporting scale. |
+| Use Python + FastAPI for backend services | Matches the preferred language and keeps service implementation straightforward. |
+| Use Docker + ECS Fargate | Gives containerized microservices without Kubernetes complexity initially. |
+| Use Cognito behind Auth Service | Avoids custom password handling while keeping backend-owned registration/login orchestration. |
+| Do not maintain custom Auth DB initially | Cognito stores credentials and issues JWT tokens. |
 | Use Message Broker | Decouples message persistence from delivery and helps absorb traffic spikes. |
+| Use Amazon MSK Serverless | Provides Kafka-compatible async delivery without managing Kafka brokers directly. |
 | Separate Message Service and Delivery Service | Keeps durable message ownership separate from async delivery workflow. |
 | No Conversation Service | Only one conversation exists between any two users; Message Service can compute `conversation_id`. |
-| Use Presence Cache | Fast online/offline checks for delivery decisions. |
-| Use Message Cache | Faster access to recent active chat messages. |
+| Use Aurora PostgreSQL for User DB | User profile data benefits from relational constraints and query flexibility. |
+| Use DynamoDB for Message DB | Chat messages are high-volume append/read data keyed by conversation. |
+| Use ElastiCache for Presence Cache | Fast online/offline checks with TTL. |
+| Use ElastiCache for Message Cache | Faster access to recent active chat messages. |
 | DB before broker/cache | Message DB remains the durable source of truth. |
 | Socket Manager writes presence | Keeps presence ownership clear. |
 | Delivery Service reads presence | Enables fast online/offline delivery decisions. |
+| Use IAM roles per service | Each service gets only the AWS permissions it needs. |
 
 ## 11. Future Enhancements
 
 These are not required for the current phase but should be considered later:
 
 - Multiple Socket Manager instances.
+- Amazon EKS/Kubernetes if container orchestration requirements outgrow ECS Fargate or Kubernetes becomes a learning/platform goal.
 - Presence Service if presence logic becomes complex.
 - Group chat.
 - Read receipts.

@@ -24,14 +24,16 @@
   <text x="610" y="126" text-anchor="middle" class="small">HTTP APIs + WebSocket</text>
 
   <rect x="180" y="190" width="190" height="60" class="service"/>
-  <text x="275" y="226" text-anchor="middle" class="label">API Gateway</text>
+  <text x="275" y="216" text-anchor="middle" class="label">API Gateway</text>
+  <text x="275" y="236" text-anchor="middle" class="small">AWS HTTP + WS</text>
 
   <rect x="815" y="190" width="190" height="60" class="service"/>
-  <text x="910" y="226" text-anchor="middle" class="label">Socket Manager</text>
+  <text x="910" y="216" text-anchor="middle" class="label">Socket Manager</text>
+  <text x="910" y="236" text-anchor="middle" class="small">FastAPI on ECS</text>
 
   <rect x="70" y="330" width="170" height="64" class="service"/>
   <text x="155" y="357" text-anchor="middle" class="label">Auth Service</text>
-  <text x="155" y="377" text-anchor="middle" class="small">credentials, login</text>
+  <text x="155" y="377" text-anchor="middle" class="small">Cognito facade</text>
 
   <rect x="300" y="330" width="170" height="64" class="service"/>
   <text x="385" y="357" text-anchor="middle" class="label">User Service</text>
@@ -45,26 +47,29 @@
   <text x="1035" y="357" text-anchor="middle" class="label">Delivery Service</text>
   <text x="1035" y="377" text-anchor="middle" class="small">async delivery</text>
 
-  <rect x="70" y="500" width="170" height="64" class="store"/>
-  <text x="155" y="537" text-anchor="middle" class="label">Auth DB</text>
+  <rect x="70" y="500" width="170" height="64" class="service"/>
+  <text x="155" y="526" text-anchor="middle" class="label">Amazon Cognito</text>
+  <text x="155" y="546" text-anchor="middle" class="small">User Pools</text>
 
   <rect x="300" y="500" width="170" height="64" class="store"/>
-  <text x="385" y="537" text-anchor="middle" class="label">User DB</text>
+  <text x="385" y="526" text-anchor="middle" class="label">User DB</text>
+  <text x="385" y="546" text-anchor="middle" class="small">Aurora PostgreSQL</text>
 
   <rect x="590" y="500" width="190" height="64" class="store"/>
-  <text x="685" y="537" text-anchor="middle" class="label">Message DB</text>
+  <text x="685" y="526" text-anchor="middle" class="label">Message DB</text>
+  <text x="685" y="546" text-anchor="middle" class="small">DynamoDB</text>
 
   <rect x="590" y="620" width="190" height="64" class="cache"/>
   <text x="685" y="646" text-anchor="middle" class="label">Message Cache</text>
-  <text x="685" y="666" text-anchor="middle" class="small">recent messages</text>
+  <text x="685" y="666" text-anchor="middle" class="small">ElastiCache</text>
 
   <rect x="815" y="500" width="190" height="64" class="broker"/>
   <text x="910" y="526" text-anchor="middle" class="label">Message Broker</text>
-  <text x="910" y="546" text-anchor="middle" class="small">MessageCreated</text>
+  <text x="910" y="546" text-anchor="middle" class="small">MSK Serverless</text>
 
   <rect x="940" y="620" width="190" height="64" class="cache"/>
   <text x="1035" y="646" text-anchor="middle" class="label">Presence Cache</text>
-  <text x="1035" y="666" text-anchor="middle" class="small">online / offline</text>
+  <text x="1035" y="666" text-anchor="middle" class="small">ElastiCache</text>
 
   <path class="arrow" d="M 560 140 L 325 190"/>
   <text x="365" y="160" class="small">HTTPS / WebSocket</text>
