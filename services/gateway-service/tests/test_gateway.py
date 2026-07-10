@@ -94,7 +94,7 @@ def test_internal_push_requires_internal_key():
 
 def test_reconnect_replaces_old_socket(_fake_presence):
     token = _token_for("carol-id")
-    with client.websocket_connect(f"/ws?token={token}") as first_ws:
+    with client.websocket_connect(f"/ws?token={token}") as _first_ws:
         with client.websocket_connect(f"/ws?token={token}") as second_ws:
             r = client.post(
                 "/internal/push",
