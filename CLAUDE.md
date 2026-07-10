@@ -4,12 +4,26 @@ Portfolio microservices project: WhatsApp-style 1:1 chat. Beginner learning
 microservices, building and deploying this end to end. Full plan history is
 in `/Users/ajitg/.claude/plans/vast-gliding-salamander.md`.
 
+GitHub repo (public): **https://github.com/ajit766/multiuser-chat**, default
+branch `main`. `gh` CLI is authenticated as `ajit766` with `repo` +
+`workflow` scopes.
+
 ## Status
 
-**Phase 1 (local build) — code complete, user is doing final manual verification.**
-**Phase 2 (CI/CD + EC2 deploy) — not started, plan below.**
+**Phase 1 (local build) — done, user verified locally, committed (067002e).**
+**Phase 2 (CI/CD + EC2 deploy) — in progress:**
+- ✅ Step 1: GitHub Actions CI (`.github/workflows/ci.yml`) — lint (ruff) +
+  test (pytest) per service via matrix, plus a separate `docker build` job
+  per service (catches prod-requirements bugs the lint+test job can't see,
+  e.g. the earlier missing-httpx incident), plus a frontend type-check+build
+  job. All green on first push.
+- ⬜ Step 2: EC2 provisioning
+- ⬜ Step 3: CD pipeline (build/push to GHCR, SSH deploy)
+- ⬜ Step 4: First deploy + smoke test
+- ⬜ Step 5: README/portfolio pass (screenshots, live URL, Future Improvements)
 
-Do not start Phase 2 until the user confirms Phase 1 is verified.
+Next up when resuming: EC2 provisioning (user does the AWS console/CLI
+steps, guided).
 
 ## Architecture
 

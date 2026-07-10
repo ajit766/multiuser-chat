@@ -1,0 +1,83 @@
+name: CD
+
+# Only deploys once the CI workflow has finished successfully on main -
+# never ship an image that hasn't passed lint/test/docker-build.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+
+jobs:
+  build-and-push:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service:
+          - user-service
+          - auth-service
+          - message-service
+          - presence-service
+          - gateway-service
+          - delivery-service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./services/${{ matrix.service }}
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/multiuser-chat-${{ matrix.service }}:latest
+
+  build-and-push-nginx:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: nginx/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/multiuser-chat-nginx:latest
+
+  deploy:
+    needs: [build-and-push, build-and-push-nginx]
+    runs-on: ubuntu-latest
+    steps:
+      # The server keeps its own git checkout at ~/app (set up once,
+      # manually, during EC2 provisioning) plus a hand-created .env with
+      # production secrets that's never committed. Deploy just pulls the
+      # latest code and the freshly-pushed images.
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/app
+            git pull
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker image prune -f
