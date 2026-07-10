@@ -2,12 +2,41 @@
 
 A WhatsApp-style 1:1 chat app, built as a microservices learning project:
 six Python/FastAPI backend services, a React frontend, Postgres, Redis, and
-RabbitMQ, all Dockerized behind a single Nginx entry point.
+RabbitMQ, all Dockerized behind a single Nginx entry point, deployed to a
+single EC2 instance with GitHub Actions CI/CD.
+
+**Live demo**: http://52.201.254.226 (a bare EC2 IP, no domain/TLS yet —
+see Future Improvements)
 
 See `PRD.md` for the original requirements, `WALKTHROUGH.md` for a detailed
 tour of the design (with a guide to running each service manually so you
-can watch logs), and `CLAUDE.md` for design decisions, known limitations,
-and project history.
+can watch logs), and `CLAUDE.md` for design decisions and project history.
+
+## Architecture
+
+```
+Browser ──▶ Nginx (single public entry point: :80)
+              │
+              ├── /auth, /users, /messages  ──▶  auth / user / message-service
+              │                                          │
+              │                                          ▼ message.created (RabbitMQ)
+              │                                   delivery-service (worker)
+              │                                    │        │
+              └── /ws (WebSocket, stays open) ──▶ gateway-service ◀── presence-service (Redis)
+                                                          ▲
+                                                          └── push on delivery
+```
+
+- **user-service** — owns `users_db` (Postgres). Registration, listing users, bcrypt password hashing.
+- **auth-service** — no DB of its own; calls user-service internally to verify credentials, issues JWTs.
+- **message-service** — owns `messages_db` (Postgres). Send/fetch messages, publishes delivery events to RabbitMQ, drives the `SENT → PENDING → DELIVERED` status machine.
+- **presence-service** — Redis-backed online/offline tracking with a TTL heartbeat.
+- **gateway-service** — holds every live WebSocket connection; the only component that can push to a specific user in real time.
+- **delivery-service** — background worker (no HTTP server), consumes queue events, decides whether to push live or mark pending.
+- **nginx** — the single public door; reverse-proxies REST + WebSocket traffic and serves the built React frontend.
+
+Full request-by-request walkthrough (with an explanation of exactly how
+the WebSocket/presence/delivery mechanics work) is in `WALKTHROUGH.md`.
 
 ## Prerequisites
 
@@ -81,6 +110,49 @@ cd frontend
 npm install
 npm run build
 ```
+
+## CI/CD
+
+- **CI** (`.github/workflows/ci.yml`, runs on every push/PR): lint (`ruff`)
+  + test (`pytest`) per service, plus a separate `docker build` of each
+  service's actual production image — that second check exists because a
+  passing test suite doesn't guarantee the production image itself
+  builds; it caught a real missing-dependency bug during development that
+  the lint+test job alone couldn't see.
+- **CD** (`.github/workflows/cd.yml`, runs after CI passes on `main`):
+  builds and pushes each service's image to GHCR, then SSHes into the EC2
+  box to `git pull` + `docker compose pull` + `up -d`. `docker-compose.prod.yml`
+  is the production Compose file — same services, but pulling prebuilt
+  images instead of building locally, and publishing only port 80.
+
+Deployment target is a single `t3.micro`/`t2.micro` EC2 instance (free
+tier) with a 2GB swap file added — without swap, 10 containers (6
+services + Postgres + Redis + RabbitMQ + Nginx) on 1GB RAM risks the OOM
+killer taking one down under load.
+
+## Future improvements
+
+Things deliberately left out of v1, either to keep scope PRD-sized or
+because they're natural next steps once this needs to handle more than a
+demo's worth of traffic:
+
+- **Multi-instance gateway-service.** The live-connection map is in-memory
+  and single-instance today. Scaling to multiple instances needs shared
+  state (Redis pub/sub) so a push for a user connected to instance B
+  reaches them via instance A.
+- **HTTPS + a real domain.** Currently plain HTTP on a bare IP. Next step:
+  a domain + Let's Encrypt (Caddy or certbot) in front of Nginx.
+- **No frontend WebSocket auto-reconnect.** If the socket drops (phone
+  backgrounded, laptop sleeps, network blip), the user has to reload the
+  page. The server-side presence/offline detection is correct either way
+  — this is purely a client-side UX gap.
+- **No dead-letter queue.** A poison message on the `message.created`
+  queue is logged and dropped, not retried — fine for a demo, not for
+  production message volume.
+- **Stateless-JWT logout only.** No server-side revocation blocklist;
+  logout is client-side token deletion.
+- **No group chat, read receipts beyond delivery, or message pagination
+  UI** — matches the PRD's 1:1-chat scope.
 
 ## Stopping everything
 

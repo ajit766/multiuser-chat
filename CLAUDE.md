@@ -11,19 +11,33 @@ branch `main`. `gh` CLI is authenticated as `ajit766` with `repo` +
 ## Status
 
 **Phase 1 (local build) — done, user verified locally, committed (067002e).**
-**Phase 2 (CI/CD + EC2 deploy) — in progress:**
-- ✅ Step 1: GitHub Actions CI (`.github/workflows/ci.yml`) — lint (ruff) +
-  test (pytest) per service via matrix, plus a separate `docker build` job
-  per service (catches prod-requirements bugs the lint+test job can't see,
-  e.g. the earlier missing-httpx incident), plus a frontend type-check+build
-  job. All green on first push.
-- ⬜ Step 2: EC2 provisioning
-- ⬜ Step 3: CD pipeline (build/push to GHCR, SSH deploy)
-- ⬜ Step 4: First deploy + smoke test
-- ⬜ Step 5: README/portfolio pass (screenshots, live URL, Future Improvements)
+**Phase 2 (CI/CD + EC2 deploy) — done.**
+- ✅ CI (`.github/workflows/ci.yml`) — lint (ruff) + test (pytest) per
+  service via matrix, a `docker build` job per service (catches
+  prod-requirements bugs lint+test can't see — bit us for real once
+  already), plus a frontend type-check+build job.
+- ✅ EC2 provisioning — `t2.micro`/`t3.micro` (free tier), us-east-1, 2GB
+  swap file added (essential for 10 containers on 1GB RAM), Elastic IP
+  **52.201.254.226**, Docker + Compose plugin installed, repo cloned to
+  `~/app` with a hand-created production `.env` (never committed).
+- ✅ CD (`.github/workflows/cd.yml`) — triggers via `workflow_run` after CI
+  passes on `main`, builds+pushes images to GHCR (public packages, so the
+  server pulls without a login token — though it also has one configured
+  via `docker login ghcr.io` as a fallback), then SSHes in and redeploys.
+  Secrets `EC2_HOST`/`EC2_SSH_KEY` are set on the repo (user ran
+  `gh secret set` locally so the private key never touched this session).
+- ✅ First automated deploy verified end-to-end against the live IP: REST
+  flows (register/login/list users) and the real-time WebSocket path
+  (live push + PENDING catch-up-on-reconnect) both confirmed working in
+  production, not just locally.
+- ✅ README pass — architecture diagram, CI/CD section, Future
+  Improvements (reframed from the limitations below). **No screenshots**
+  — no browser automation tool available in this environment to capture
+  them; flagged to the user as something they could add themselves.
 
-Next up when resuming: EC2 provisioning (user does the AWS console/CLI
-steps, guided).
+Nothing currently pending. If resuming: check `git status` for anything
+uncommitted first, and consider revisiting "Future improvements" in
+README.md as a prioritized backlog if the user wants to keep building.
 
 ## Architecture
 
