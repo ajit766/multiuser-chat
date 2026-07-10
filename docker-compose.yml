@@ -1,0 +1,168 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chatapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatapp}
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chatapp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-chatapp}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-chatapp}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  user-service:
+    build: ./services/user-service
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chatapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatapp}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: users_db
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-string}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-dev-key}
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  auth-service:
+    build: ./services/auth-service
+    restart: unless-stopped
+    environment:
+      USER_SERVICE_URL: http://user-service:8000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-dev-key}
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-string}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-1440}
+    ports:
+      - "8002:8000"
+    depends_on:
+      - user-service
+
+  message-service:
+    build: ./services/message-service
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chatapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatapp}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: messages_db
+      RABBITMQ_USER: ${RABBITMQ_USER:-chatapp}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-chatapp}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      GATEWAY_SERVICE_URL: http://gateway-service:8000
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-string}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-dev-key}
+    ports:
+      - "8003:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  presence-service:
+    build: ./services/presence-service
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-dev-key}
+      PRESENCE_TTL_SECONDS: ${PRESENCE_TTL_SECONDS:-90}
+    ports:
+      - "8004:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  gateway-service:
+    build: ./services/gateway-service
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-string}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-dev-key}
+      PRESENCE_SERVICE_URL: http://presence-service:8000
+      MESSAGE_SERVICE_URL: http://message-service:8000
+    ports:
+      - "8005:8000"
+    depends_on:
+      - presence-service
+      - message-service
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    depends_on:
+      - auth-service
+      - user-service
+      - message-service
+      - gateway-service
+
+  delivery-service:
+    build: ./services/delivery-service
+    restart: unless-stopped
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER:-chatapp}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-chatapp}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      PRESENCE_SERVICE_URL: http://presence-service:8000
+      GATEWAY_SERVICE_URL: http://gateway-service:8000
+      MESSAGE_SERVICE_URL: http://message-service:8000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-dev-key}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      presence-service:
+        condition: service_started
+      gateway-service:
+        condition: service_started
+      message-service:
+        condition: service_started
+
+volumes:
+  postgres_data:

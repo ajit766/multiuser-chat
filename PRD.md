@@ -1,6 +1,6 @@
 Multi User Chat Application Requirements [ChatBot support deferred to Phase 2]
 
-Setting : Chat System for an organization with 10,00000 employees (built for scale)
+Setting : Chat System for an organization with 10,0000 employees 
 
  1. Register a new user
 Support registering of a new user on a web page
